@@ -1,0 +1,25 @@
+
+const int TEST0 = 0;
+const int TEST1 = 4;
+const int FLOAT_TEST = 8;
+
+import void PrintI(int i)
+{
+    console.log(i);    
+}
+
+import void PrintF(float f)
+{
+    console.log(f);    
+}
+
+export void Main()
+{
+    int[TEST0] = 100;
+    int[TEST1] = 10 * 3;
+    float[FLOAT_TEST] = -5.22f;
+
+    PrintI(int[TEST0] + int[TEST1]);
+    PrintI(int[TEST1]);
+    PrintF(float[FLOAT_TEST]);
+}
