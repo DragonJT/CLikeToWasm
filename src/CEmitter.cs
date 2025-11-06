@@ -6,6 +6,7 @@ record TokenOp(TokenKind TokenKind, Opcode Opcode);
 class CEmitter(List<ICDecl> decls)
 {
     List<ICDecl> decls = decls;
+    List<Local> locals = [];
 
     static Token[] GetBlock(Parser p, TokenKind startKind, TokenKind endKind)
     {
@@ -64,7 +65,9 @@ class CEmitter(List<ICDecl> decls)
         {
             parser.Next();
         }
-        return parser.GetTokens(start, parser.Index);
+        var end = parser.Index;
+        parser.Next();
+        return parser.GetTokens(start, end);
     }
 
     static Token[] Between(Parser parser, TokenKind open, TokenKind close)
@@ -158,6 +161,11 @@ class CEmitter(List<ICDecl> decls)
             }
             else if (tokens[0].Kind == TokenKind.Identifier)
             {
+                var local = locals.FirstOrDefault(l => l.Name == tokens[0].Lexeme);
+                if (local != null)
+                {
+                    return [new WasmCode(Opcode.get_local, local.Name)];
+                }
                 var cconst = decls.OfType<CConst>().FirstOrDefault(c => c.Name == tokens[0].Lexeme);
                 if (cconst != null)
                 {
@@ -232,7 +240,6 @@ class CEmitter(List<ICDecl> decls)
         p.Expect(TokenKind.Equal);
         var expr = EmitExpression(UntilSemiColon(p.Index, p));
         var opcode = new WasmCode(store);
-        p.Expect(TokenKind.Semicolon);
         return [.. indexExpr, .. expr, opcode];
     } 
     
@@ -256,6 +263,18 @@ class CEmitter(List<ICDecl> decls)
             {
                 return EmitStore(p, Opcode.i32_store);
             }
+            else if (p.Peek().Kind == TokenKind.Identifier)
+            {
+                var localName = p.Expect(TokenKind.Identifier).Lexeme;
+                locals.Add(new Local(Valtype.I32, localName));
+                if (p.Match(TokenKind.Equal))
+                {
+                    var start = p.Index;
+                    var expr = EmitExpression(UntilSemiColon(start, p));
+                    return [.. expr, new WasmCode(Opcode.set_local, localName)];
+                }
+                return [];
+            }
             else
             {
                 throw new Exception();
@@ -266,6 +285,18 @@ class CEmitter(List<ICDecl> decls)
             if (p.Match(TokenKind.LBracket))
             {
                 return EmitStore(p, Opcode.f32_store);
+            }
+            else if (p.Peek().Kind == TokenKind.Identifier)
+            {
+                var localName = p.Expect(TokenKind.Identifier).Lexeme;
+                locals.Add(new Local(Valtype.F32, localName));
+                if (p.Match(TokenKind.Equal))
+                {
+                    var start = p.Index;
+                    var expr = EmitExpression(UntilSemiColon(start, p));
+                    return [.. expr, new WasmCode(Opcode.set_local, localName)];
+                }
+                return [];
             }
             else
             {
@@ -283,9 +314,7 @@ class CEmitter(List<ICDecl> decls)
         else if (p.Match(TokenKind.Identifier))
         {
             var start = p.Index - 1;
-            var codes = EmitExpression(UntilSemiColon(start, p));
-            p.Expect(TokenKind.Semicolon);
-            return codes;
+            return EmitExpression(UntilSemiColon(start, p));
         }
         else
         {
@@ -300,6 +329,7 @@ class CEmitter(List<ICDecl> decls)
 
         foreach (var d in decls)
         {
+            locals.Clear();
             if (d is CFunction cFunction)
             {
                 if (cFunction.FunctionType == CFunctionType.Import)
@@ -317,7 +347,8 @@ class CEmitter(List<ICDecl> decls)
                     var name = cFunction.Name;
                     var returnType = WasmEmitter.GetValtype(cFunction.ReturnType);
                     var parameters = cFunction.Parameters.Select(p => new Parameter(WasmEmitter.GetValtype(p.Type), p.Name)).ToArray();
-                    functions.Add(new WasmFunction(export, name, returnType, parameters, [], EmitStatement(cFunction.Code)));
+                    var code = EmitStatement(cFunction.Code);
+                    functions.Add(new WasmFunction(export, name, returnType, parameters, [.. locals], code));
                 }
             }
         }

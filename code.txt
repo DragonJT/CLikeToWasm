@@ -24,4 +24,6 @@ export void Main()
     PrintF(float[FLOAT_TEST]);
     if(0) PrintF(1.5f);
     if(1) PrintF(1.1f);
+    int i = 4;
+    PrintI(i + 1);
 }
