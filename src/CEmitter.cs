@@ -1,6 +1,4 @@
 
-interface IIdentifier { }
-
 record TokenOp(TokenKind TokenKind, Opcode Opcode);
 
 class CEmitter(List<ICDecl> decls)
@@ -212,6 +210,7 @@ class CEmitter(List<ICDecl> decls)
             return [.. codes];
         }
         List<TokenOp[]> ops = [
+            [new (TokenKind.LT, Opcode.i32_lt_s), new (TokenKind.GT, Opcode.i32_gt_s)],
             [new (TokenKind.Plus, Opcode.i32_add), new(TokenKind.Minus, Opcode.i32_sub)],
             [new (TokenKind.Star, Opcode.i32_mul), new (TokenKind.Slash, Opcode.i32_div_s)]];
         foreach (var op in ops)

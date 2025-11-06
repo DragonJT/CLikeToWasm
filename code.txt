@@ -1,24 +1,70 @@
 
-const int TEST0 = 0;
-const int TEST1 = 4;
-const int FLOAT_TEST = 8;
+const int R = 0;
+const int G = 4;
+const int B = 8;
+const int BALLX = 12;
+const int BALLY = 16;
+const int DIRX = 20;
+const int DIRY = 24;
+const int SPEED = 5;
 
-import void PrintI(int i)
+import void CreateCanvas()
 {
-    console.log(i);    
+    var canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    document.body.appendChild(canvas);
+    globals.ctx = canvas.getContext('2d');
 }
 
-import void PrintF(float f)
+import void ClearScreen()
 {
-    console.log(f);    
+    globals.ctx.fillRect(0,0,800,600);
+}
+
+import void FillStyle(int r, int g, int b)
+{
+    globals.ctx.fillStyle = 'rgb('+r+','+g+','+b+')';
+}
+
+import void DrawBall(int x, int y, int radius)
+{
+    globals.ctx.beginPath();
+    globals.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    globals.ctx.fill();
+}
+
+import void RequestAnimationFrame()
+{
+    requestAnimationFrame(exports.Update);
+}
+
+export void Update()
+{
+    int[R] = int[R] + 1;
+    int[G] = int[G] + 2;
+    int[B] = int[B] + 3;
+    if(int[R] > 255) int[R] = 0;
+    if(int[G] > 255) int[G] = 0;
+    if(int[B] > 255) int[B] = 0;
+    int[BALLX] = int[BALLX] + int[DIRX];
+    int[BALLY] = int[BALLY] + int[DIRY];
+    if(int[BALLX] > 800) int[DIRX] = 0 - SPEED;
+    if(int[BALLY] > 600) int[DIRY] = 0 - SPEED;
+    if(int[BALLX] < 0) int[DIRX] = SPEED;
+    if(int[BALLY] < 0) int[DIRY] = SPEED;
+
+    FillStyle(int[R], int[G], int[B]);
+    ClearScreen();
+    FillStyle(0,0,0);
+    DrawBall(int[BALLX], int[BALLY], 30);
+    RequestAnimationFrame();
 }
 
 export void Main()
 {
-    for(i : 3)
-    {
-        for(ii : 3){
-            PrintI((i + 1) * ii);
-        }
-    }
+    int[DIRX] = SPEED;
+    int[DIRY] = SPEED;
+    CreateCanvas();
+    RequestAnimationFrame();
 }
