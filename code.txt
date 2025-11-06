@@ -15,9 +15,10 @@ import void PrintF(float f)
 
 export void Main()
 {
-    int i = 4;
-    while(i){
-        PrintI(i);
-        i = i - 1;
+    for(i : 3)
+    {
+        for(ii : 3){
+            PrintI((i + 1) * ii);
+        }
     }
 }

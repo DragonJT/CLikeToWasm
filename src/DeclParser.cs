@@ -16,14 +16,15 @@ class Parser
     readonly Token[] tokens;
 
     public int Index => index;
-    
+    public bool OutOfRange => index >= tokens.Length;
+
     public Parser(string source, string[] keywords)
     {
         var lexer = new Lexer(source, keywords);
         tokens = [.. lexer.Tokenize()];
     }
 
-    Parser(Token[] tokens)
+    public Parser(Token[] tokens)
     {
         this.tokens = tokens;
     }
@@ -111,7 +112,7 @@ class DeclParser
 
     public DeclParser(string source)
     {
-        p = new Parser(source, ["export", "import", "struct", "const", "int", "float", "void", "if", "while"]);
+        p = new Parser(source, ["export", "import", "struct", "const", "int", "float", "void", "if", "while", "for"]);
     }
 
     ICDecl ParseDecl()

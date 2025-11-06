@@ -8,12 +8,16 @@ class CEmitter(List<ICDecl> decls)
     List<ICDecl> decls = decls;
     List<Local> locals = [];
 
-    static Token[] GetBlock(Parser p, TokenKind startKind, TokenKind endKind)
+    static bool GetBlock(Parser p, TokenKind startKind, TokenKind endKind, bool fillAvailableSpace, out Token[]? tokens)
     {
-        p.Expect(startKind);
+        if (!p.Match(startKind))
+        {
+            tokens = null;
+            return false;
+        }
         var start = p.Index;
         var depth = 0;
-        while (true)
+        while (!p.OutOfRange)
         {
             var k = p.Peek().Kind;
             if (k == startKind)
@@ -27,36 +31,27 @@ class CEmitter(List<ICDecl> decls)
                 {
                     var end = p.Index;
                     p.Next();
-                    return p.GetTokens(start, end);
+                    tokens = p.GetTokens(start, end);
+                    if (fillAvailableSpace)
+                    {
+                        return p.OutOfRange;
+                    }
+                    return true;
                 }
             }
             p.Next();
         }
+        tokens = null;
+        return false;
     }
 
-    static bool IsBlock(Token[] tokens, TokenKind start, TokenKind end, int deltaStart, int deltaEnd)
+    static Token[] GetBlock(Parser p, TokenKind startKind, TokenKind endKind)
     {
-        if (tokens[deltaStart].Kind == start && tokens[^deltaEnd].Kind == end)
+        if (GetBlock(p, startKind, endKind, false, out var tokens))
         {
-            int depth = 0;
-            for (var i = deltaStart + 1; i <= tokens.Length - deltaEnd - 1; i++)
-            {
-                if (tokens[i].Kind == start)
-                {
-                    depth++;
-                }
-                else if (tokens[i].Kind == end)
-                {
-                    depth--;
-                    if (depth <= 0)
-                    {
-                        return false;
-                    }
-                }
-            }
-            return depth == 0;
+            return tokens!;
         }
-        return false;
+        throw new Exception();
     }
 
     static Token[] UntilSemiColon(int start, Parser parser)
@@ -143,7 +138,11 @@ class CEmitter(List<ICDecl> decls)
 
     public WasmCode[] EmitExpression(Token[] tokens)
     {
-        if (tokens.Length == 1)
+        if (GetBlock(new Parser(tokens), TokenKind.LParen, TokenKind.RParen, true, out var exprTokens))
+        {
+            return EmitExpression(exprTokens!);
+        }
+        else if (tokens.Length == 1)
         {
             if (tokens[0].Kind == TokenKind.Integer)
             {
@@ -153,7 +152,7 @@ class CEmitter(List<ICDecl> decls)
             {
                 var floatStr = tokens[0].Lexeme;
                 var l = floatStr[^1];
-                if(l == 'f' || l == 'F')
+                if (l == 'f' || l == 'F')
                 {
                     floatStr = floatStr[..^1];
                 }
@@ -178,35 +177,32 @@ class CEmitter(List<ICDecl> decls)
                 throw new Exception(tokens[0].Kind.ToString());
             }
         }
-        if (tokens.Length > 3)
+        else if (GetBlock(new Parser(tokens[1..]), TokenKind.LBracket, TokenKind.RBracket, true, out var argTokens))
         {
-            if (IsBlock(tokens, TokenKind.LBracket, TokenKind.RBracket, 1, 1))
+            var t = tokens[0];
+            if (t.Kind == TokenKind.Keyword)
             {
-                var t = tokens[0];
-                if (t.Kind == TokenKind.Keyword)
+                if (t.Lexeme == "int")
                 {
-                    if (t.Lexeme == "int")
-                    {
-                        return [.. EmitExpression(tokens[2..^1]), new WasmCode(Opcode.i32_load)];
-                    }
-                    else if (t.Lexeme == "float")
-                    {
-                        return [.. EmitExpression(tokens[2..^1]), new WasmCode(Opcode.f32_load)];
-                    }
-                    else
-                    {
-                        throw new Exception();
-                    }
+                    return [.. EmitExpression(argTokens!), new WasmCode(Opcode.i32_load)];
+                }
+                else if (t.Lexeme == "float")
+                {
+                    return [.. EmitExpression(argTokens!), new WasmCode(Opcode.f32_load)];
                 }
                 else
                 {
                     throw new Exception();
                 }
             }
+            else
+            {
+                throw new Exception();
+            }
         }
-        if (tokens.Length >= 3 && tokens[0].Kind == TokenKind.Identifier && IsBlock(tokens, TokenKind.LParen, TokenKind.RParen, 1, 1))
+        if (tokens[0].Kind == TokenKind.Identifier && GetBlock(new Parser(tokens[1..]), TokenKind.LParen, TokenKind.RParen, true, out var argsTokens))
         {
-            var args = SplitByComma(tokens[2..^1]);
+            var args = SplitByComma(argsTokens!);
             List<WasmCode> codes = [];
             foreach (var a in args)
             {
@@ -225,6 +221,11 @@ class CEmitter(List<ICDecl> decls)
             {
                 return output;
             }
+        }
+
+        foreach(var t in tokens)
+        {
+            Console.WriteLine(t);
         }
         throw new Exception();
     }
@@ -307,20 +308,49 @@ class CEmitter(List<ICDecl> decls)
             var end = new WasmCode(Opcode.end);
             return [.. condition, @if, .. statement, end];
         }
-        else if(p.Match(TokenKind.Keyword, ["while"]))
+        else if (p.Match(TokenKind.Keyword, ["while"]))
         {
             var condition = EmitExpression(GetBlock(p, TokenKind.LParen, TokenKind.RParen));
-            WasmCode[] loop = [new WasmCode(Opcode.block, "void"), new WasmCode(Opcode.loop, "void")];
+            WasmCode[] loop = [new (Opcode.block, "void"), new WasmCode(Opcode.loop, "void")];
             var statement = EmitStatement(p);
-            WasmCode[] end = [new WasmCode(Opcode.br, "0"), new WasmCode(Opcode.end), new WasmCode(Opcode.end)];
-            return [.. loop, .. condition, new WasmCode(Opcode.i32_eqz), new WasmCode(Opcode.br_if, "1"), .. statement, .. end];
+            WasmCode[] end = [new (Opcode.br, "0"), new (Opcode.end), new (Opcode.end)];
+            return [.. loop, .. condition, new (Opcode.i32_eqz), new (Opcode.br_if, "1"), .. statement, .. end];
+        }
+        else if(p.Match(TokenKind.Keyword, ["for"]))
+        {
+            var inside = GetBlock(p, TokenKind.LParen, TokenKind.RParen);
+            if (inside[0].Kind != TokenKind.Identifier || inside[1].Kind != TokenKind.Colon)
+            {
+                throw new Exception();
+            }
+            var iter = inside[0].Lexeme;
+            if(!locals.Any(l=>l.Name == iter))
+            {
+                locals.Add(new Local(Valtype.I32, iter));
+            }
+            WasmCode[] init = [new (Opcode.i32_const, "0"), new (Opcode.set_local, iter)];
+            WasmCode[] loop = [new (Opcode.block, "void"), new (Opcode.loop, "void")];
+            WasmCode[] checkIterUnderTotal = [
+                new (Opcode.get_local, iter),
+                .. EmitExpression(inside[2..]),
+                new (Opcode.i32_lt_s),
+                new (Opcode.i32_eqz),
+                new (Opcode.br_if, "1")];
+            var statement = EmitStatement(p);
+            WasmCode[] updateIter = [
+                new (Opcode.get_local, iter),
+                new (Opcode.i32_const, "1"),
+                new (Opcode.i32_add),
+                new (Opcode.set_local, iter)];
+            WasmCode[] end = [new (Opcode.br, "0"), new (Opcode.end), new (Opcode.end)];
+            return [.. init, .. loop, .. checkIterUnderTotal, .. statement, ..updateIter, .. end];
         }
         else if (p.Match(TokenKind.Identifier))
         {
             if (p.Match(TokenKind.Equal))
             {
                 var name = p.Peek(-2).Lexeme;
-                return [.. EmitExpression(UntilSemiColon(p.Index, p)), new WasmCode(Opcode.set_local, name)];
+                return [.. EmitExpression(UntilSemiColon(p.Index, p)), new (Opcode.set_local, name)];
             }
             else
             {
