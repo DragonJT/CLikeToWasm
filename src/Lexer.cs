@@ -113,6 +113,7 @@ sealed class Lexer
                 case '[': yield return MakeSingle(TokenKind.LBracket, leading); continue;
                 case ']': yield return MakeSingle(TokenKind.RBracket, leading); continue;
                 case '+': yield return MakeSingle(TokenKind.Plus, leading); continue;
+                case '-': yield return MakeSingle(TokenKind.Minus, leading); continue;
                 case '*': yield return MakeSingle(TokenKind.Star, leading); continue;
                 case '/': yield return MakeSingle(TokenKind.Slash, leading); continue;
                 case '%': yield return MakeSingle(TokenKind.Percent, leading); continue;

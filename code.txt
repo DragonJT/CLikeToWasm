@@ -15,15 +15,9 @@ import void PrintF(float f)
 
 export void Main()
 {
-    int[TEST0] = 100;
-    int[TEST1] = 10 * 3;
-    float[FLOAT_TEST] = -5.22f;
-
-    PrintI(int[TEST0] + int[TEST1]);
-    PrintI(int[TEST1]);
-    PrintF(float[FLOAT_TEST]);
-    if(0) PrintF(1.5f);
-    if(1) PrintF(1.1f);
     int i = 4;
-    PrintI(i + 1);
+    while(i){
+        PrintI(i);
+        i = i - 1;
+    }
 }

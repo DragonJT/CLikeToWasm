@@ -308,6 +308,11 @@ static class WasmEmitter
                 var id = uint.Parse(instruction.Value);
                 codeBytes.AddRange([(byte)Opcode.br, .. UnsignedLEB128(id)]);
             }
+            else if(instruction.Opcode == Opcode.br_if)
+            {
+                var id = uint.Parse(instruction.Value);
+                codeBytes.AddRange([(byte)Opcode.br_if, .. UnsignedLEB128(id)]);
+            }
             else if (instruction.Opcode == Opcode.i32_load)
             {
                 codeBytes.AddRange([(byte)Opcode.i32_load, 0x00, 0x00]); //align, offset
@@ -320,7 +325,7 @@ static class WasmEmitter
             {
                 codeBytes.AddRange([(byte)Opcode.f32_load, 0x00, 0x00]); //align, offset
             }
-            else if(instruction.Opcode == Opcode.f32_store)
+            else if (instruction.Opcode == Opcode.f32_store)
             {
                 codeBytes.AddRange([(byte)Opcode.f32_store, 0x00, 0x00]); //align, offset
             }

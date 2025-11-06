@@ -226,10 +226,6 @@ class CEmitter(List<ICDecl> decls)
                 return output;
             }
         }
-        foreach(var t in tokens)
-        {
-            Console.WriteLine(t);
-        }
         throw new Exception();
     }
 
@@ -303,18 +299,34 @@ class CEmitter(List<ICDecl> decls)
                 throw new Exception();
             }
         }
-        else if(p.Match(TokenKind.Keyword, ["if"]))
+        else if (p.Match(TokenKind.Keyword, ["if"]))
         {
             var condition = EmitExpression(GetBlock(p, TokenKind.LParen, TokenKind.RParen));
             var @if = new WasmCode(Opcode.@if, "void");
             var statement = EmitStatement(p);
             var end = new WasmCode(Opcode.end);
-            return [.. condition, @if, ..statement, end];
+            return [.. condition, @if, .. statement, end];
+        }
+        else if(p.Match(TokenKind.Keyword, ["while"]))
+        {
+            var condition = EmitExpression(GetBlock(p, TokenKind.LParen, TokenKind.RParen));
+            WasmCode[] loop = [new WasmCode(Opcode.block, "void"), new WasmCode(Opcode.loop, "void")];
+            var statement = EmitStatement(p);
+            WasmCode[] end = [new WasmCode(Opcode.br, "0"), new WasmCode(Opcode.end), new WasmCode(Opcode.end)];
+            return [.. loop, .. condition, new WasmCode(Opcode.i32_eqz), new WasmCode(Opcode.br_if, "1"), .. statement, .. end];
         }
         else if (p.Match(TokenKind.Identifier))
         {
-            var start = p.Index - 1;
-            return EmitExpression(UntilSemiColon(start, p));
+            if (p.Match(TokenKind.Equal))
+            {
+                var name = p.Peek(-2).Lexeme;
+                return [.. EmitExpression(UntilSemiColon(p.Index, p)), new WasmCode(Opcode.set_local, name)];
+            }
+            else
+            {
+                var start = p.Index - 1;
+                return EmitExpression(UntilSemiColon(start, p));
+            }
         }
         else
         {
