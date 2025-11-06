@@ -22,4 +22,6 @@ export void Main()
     PrintI(int[TEST0] + int[TEST1]);
     PrintI(int[TEST1]);
     PrintF(float[FLOAT_TEST]);
+    if(0) PrintF(1.5f);
+    if(1) PrintF(1.1f);
 }

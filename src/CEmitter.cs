@@ -7,12 +7,38 @@ class CEmitter(List<ICDecl> decls)
 {
     List<ICDecl> decls = decls;
 
+    static Token[] GetBlock(Parser p, TokenKind startKind, TokenKind endKind)
+    {
+        p.Expect(startKind);
+        var start = p.Index;
+        var depth = 0;
+        while (true)
+        {
+            var k = p.Peek().Kind;
+            if (k == startKind)
+            {
+                depth++;
+            }
+            else if (k == endKind)
+            {
+                depth--;
+                if (depth < 0)
+                {
+                    var end = p.Index;
+                    p.Next();
+                    return p.GetTokens(start, end);
+                }
+            }
+            p.Next();
+        }
+    }
+
     static bool IsBlock(Token[] tokens, TokenKind start, TokenKind end, int deltaStart, int deltaEnd)
     {
         if (tokens[deltaStart].Kind == start && tokens[^deltaEnd].Kind == end)
         {
             int depth = 0;
-            for (var i = deltaStart+1; i <= tokens.Length - deltaEnd - 1; i++)
+            for (var i = deltaStart + 1; i <= tokens.Length - deltaEnd - 1; i++)
             {
                 if (tokens[i].Kind == start)
                 {
@@ -66,6 +92,10 @@ class CEmitter(List<ICDecl> decls)
 
     static Token[][] SplitByComma(Token[] tokens)
     {
+        if(tokens.Length == 0)
+        {
+            return [];
+        }
         List<Token[]> result = [];
         var start = 0;
         for (var i = 0; i < tokens.Length; i++)
@@ -166,7 +196,7 @@ class CEmitter(List<ICDecl> decls)
                 }
             }
         }
-        if (tokens.Length > 3 && tokens[0].Kind == TokenKind.Identifier && IsBlock(tokens, TokenKind.LParen, TokenKind.RParen, 1, 1))
+        if (tokens.Length >= 3 && tokens[0].Kind == TokenKind.Identifier && IsBlock(tokens, TokenKind.LParen, TokenKind.RParen, 1, 1))
         {
             var args = SplitByComma(tokens[2..^1]);
             List<WasmCode> codes = [];
@@ -194,8 +224,8 @@ class CEmitter(List<ICDecl> decls)
         }
         throw new Exception();
     }
-    
-    WasmCode[] Store(Parser p, Opcode store)
+
+    WasmCode[] EmitStore(Parser p, Opcode store)
     {
         var indexExpr = EmitExpression(Between(p, TokenKind.LBracket, TokenKind.RBracket));
         p.Expect(TokenKind.RBracket);
@@ -205,6 +235,63 @@ class CEmitter(List<ICDecl> decls)
         p.Expect(TokenKind.Semicolon);
         return [.. indexExpr, .. expr, opcode];
     } 
+    
+    WasmCode[] EmitStatement(Parser p)
+    {
+        if (p.Match(TokenKind.LBrace))
+        {
+            List<WasmCode> codes = [];
+            while (true)
+            {
+                if (p.Match(TokenKind.RBrace))
+                {
+                    return [.. codes];
+                }
+                codes.AddRange(EmitStatement(p));
+            }
+        }
+        else if (p.Match(TokenKind.Keyword, ["int"]))
+        {
+            if (p.Match(TokenKind.LBracket))
+            {
+                return EmitStore(p, Opcode.i32_store);
+            }
+            else
+            {
+                throw new Exception();
+            }
+        }
+        else if (p.Match(TokenKind.Keyword, ["float"]))
+        {
+            if (p.Match(TokenKind.LBracket))
+            {
+                return EmitStore(p, Opcode.f32_store);
+            }
+            else
+            {
+                throw new Exception();
+            }
+        }
+        else if(p.Match(TokenKind.Keyword, ["if"]))
+        {
+            var condition = EmitExpression(GetBlock(p, TokenKind.LParen, TokenKind.RParen));
+            var @if = new WasmCode(Opcode.@if, "void");
+            var statement = EmitStatement(p);
+            var end = new WasmCode(Opcode.end);
+            return [.. condition, @if, ..statement, end];
+        }
+        else if (p.Match(TokenKind.Identifier))
+        {
+            var start = p.Index - 1;
+            var codes = EmitExpression(UntilSemiColon(start, p));
+            p.Expect(TokenKind.Semicolon);
+            return codes;
+        }
+        else
+        {
+            throw new Exception();
+        }
+    }
 
     public void Emit()
     {
@@ -230,50 +317,7 @@ class CEmitter(List<ICDecl> decls)
                     var name = cFunction.Name;
                     var returnType = WasmEmitter.GetValtype(cFunction.ReturnType);
                     var parameters = cFunction.Parameters.Select(p => new Parameter(WasmEmitter.GetValtype(p.Type), p.Name)).ToArray();
-                    var p = cFunction.Code;
-                    p.Expect(TokenKind.LBrace);
-                    List<WasmCode> codes = [];
-                    List<Local> locals = [];
-                    while (true)
-                    {
-                        if (p.Match(TokenKind.RBrace))
-                        {
-                            functions.Add(new WasmFunction(export, name, returnType, parameters, [.. locals], [.. codes]));
-                            break;
-                        }
-                        else if (p.Match(TokenKind.Keyword, ["int"]))
-                        {
-                            if (p.Match(TokenKind.LBracket))
-                            {
-                                codes.AddRange(Store(p, Opcode.i32_store));
-                            }
-                            else
-                            {
-                                throw new Exception();
-                            }
-                        }
-                        else if(p.Match(TokenKind.Keyword, ["float"]))
-                        {
-                            if (p.Match(TokenKind.LBracket))
-                            {
-                                codes.AddRange(Store(p, Opcode.f32_store));
-                            }
-                            else
-                            {
-                                throw new Exception();
-                            }
-                        }
-                        else if (p.Match(TokenKind.Identifier))
-                        {
-                            var start = p.Index - 1;
-                            codes.AddRange(EmitExpression(UntilSemiColon(start, p)));
-                            p.Expect(TokenKind.Semicolon);
-                        }
-                        else
-                        {
-                            throw new Exception();
-                        }
-                    }
+                    functions.Add(new WasmFunction(export, name, returnType, parameters, [], EmitStatement(cFunction.Code)));
                 }
             }
         }

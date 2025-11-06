@@ -111,7 +111,7 @@ class DeclParser
 
     public DeclParser(string source)
     {
-        p = new Parser(source, ["export", "import", "struct", "const", "int", "float", "void"]);
+        p = new Parser(source, ["export", "import", "struct", "const", "int", "float", "void", "if", "while"]);
     }
 
     ICDecl ParseDecl()
